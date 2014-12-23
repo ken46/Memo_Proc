@@ -40,20 +40,21 @@ public class ImputTextActivity extends ActionBarActivity {
 	        etTitle = (EditText)findViewById(R.id.titleText);
 	        etText = (EditText)findViewById(R.id.impText);
 	        
+	        // ボタンのクリックリスナー登録
 	        btReturn.setOnClickListener(new ReturnClickListener());
 	        btSave.setOnClickListener(new SaveClickListener());
 	        
-	        
 	        // インテントを取得
 	        Intent intent = getIntent();
+	        
 	        // インテントに保存されたデータを取得
 	        int num = 0;
 	        tapNum = intent.getIntExtra("tapNum", num);
 	        loadfile = intent.getBooleanExtra("bool", loadfile);
 	        if (loadfile) {
+	        	// データベースから文字を取得
 	        	findDataBase();				
 			}
-	        Log.v("test", String.valueOf(tapNum));
 	}
 	
     @Override
@@ -82,13 +83,14 @@ public class ImputTextActivity extends ActionBarActivity {
 	
 		@Override
 		public void onClick(View v) {
-			setDataBase();
-			MainActivity.adaperUpdate(etTitle.getText().toString());
+			if (etTitle == null || etTitle.length() == 0 ) {
+				etTitle.setText("NO_TITLE");
+				Log.v("test", "テキスト未入力");
+			}
+			// データを保存
+			impDataBase();
 			finish();
-			
-	
-		}
-	
+		}	
 	}
 
 	/**
@@ -98,35 +100,75 @@ public class ImputTextActivity extends ActionBarActivity {
 	
 		@Override
 		public void onClick(View v) {
-			finish();
-	
-		}
-	
+			finish();	
+		}	
 	}
 	
 	/**
 	 * データベースに値を保存
 	 */
-	public void setDataBase(){
+	private void impDataBase(){
 		
         // データベース作成
         DBCreate helper = new DBCreate(this);
         SQLiteDatabase database = helper.getWritableDatabase();
         
-        ContentValues val = new ContentValues();
-        val.put("TITLE", etTitle.getText().toString() );
-        val.put("TEXT", etText.getText().toString());
-        database.insert("T_USER", null, val);	
+        String table = "T_USER";
+        String title = etTitle.getText().toString();
+        String text = etText.getText().toString();
         
+        ContentValues val = new ContentValues();
+        val.put("TITLE", title);
+        val.put("TEXT", text);
+        		
+        // トランザクション制御の開始
+        database.beginTransaction();
+
+		// 既存メモの保存処理
+        if (loadfile) {
+            String columns[] = new String[] {"USER_ID, TITLE, TEXT"};
+            Cursor c = database.query(table, columns, null, null,  null, null, null);
+            c.moveToFirst();
+            c.moveToPosition(tapNum);
+            
+            // 選択されたリストのprimary key 取得
+            int idxId = c.getColumnIndex("USER_ID");
+            int numId = c.getInt(idxId);
+            
+    		String whereClause = "USER_ID = ?";
+    		String whereArgs[] = {String.valueOf(numId)};
+            
+        	Log.v("test", "既存上書き");
+        	Log.v("test", String.valueOf(tapNum));
+        	database.update(table, val, whereClause, whereArgs);
+        	MainActivity.updateListString(title, tapNum);
+			
+		}
+		// 新規メモの保存処理
+        else{
+            database.insert("T_USER", null, val);
+            MainActivity.adaperUpdate(title);
+        }
+        
+    	// コミット
+    	database.setTransactionSuccessful();
+    	
+    	// トランザクション制御終了
+    	database.endTransaction();
+    	
         // データベースを閉じる
         database.close();
-		}
+	}
 
-	public void findDataBase() {
-	      // SQLiteOpenHelper のインスタンスを生成
+	/**
+	 * 既存メモの内容を取得
+	 */
+	private void findDataBase() {
+		
+	    // SQLiteOpenHelper のインスタンスを生成
         DBCreate helper = new DBCreate(this);
  
-        // データベースが作成
+        // データベース作成
         SQLiteDatabase database = helper.getWritableDatabase();
         
 		String table = "T_USER";								// テーブル名		
@@ -134,14 +176,13 @@ public class ImputTextActivity extends ActionBarActivity {
         Cursor c = database.query(table, columns, null, null,  null, null, null);
         c.moveToFirst();
         c.moveToPosition(tapNum);
-        		
+        
+        // タイトルとテキストを取得
 		String title = c.getString(c.getColumnIndex("TITLE"));
 		String text = c.getString(c.getColumnIndex("TEXT"));
 		
+		// タイトルとテキスト表示
 		etTitle.setText(title);
 		etText.setText(text);
-		Log.v("test", title);
-		Log.v("test", text);
 	}
-
 }
